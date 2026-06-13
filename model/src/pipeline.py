@@ -28,23 +28,13 @@ def run_bulk_pipeline(zip_path, model_path, raw_dir, processed_dir):
         def update_ui(data):
             progress.update(task_id, total=data["total"], completed=data["index"])
             
-            status_text = f"[green]{data['index']} of {data['total']}[/green] - [yellow]{data['file']}[/yellow]\n"
-            status_text += f"[bold white]Detected: {', '.join(data['texts']) if data['texts'] else 'None'}[/bold white] "
-            status_text += f"| [magenta]Time: {data['time']:.2f}s[/magenta]\n"
-            
+            if data["status"] == "SUCCESS":
+                status_text = f"[green]{data['index']} of {data['total']}[/green] - [yellow]{data['file']}[/yellow]\n"
+                status_text += f"[bold white]Detected: {', '.join(data['texts']) if data['texts'] else 'None'}[/bold white] "
+                status_text += f"| [magenta]Time: {data['time']:.2f}s[/magenta]\n"
+            else:
+                status_text = f"[red]{data['index']} of {data['total']}[/red] - [yellow]{data['file']}[/yellow]\n"
+                status_text += f"[bold red]Status: CRASHED (See batch_logs.txt for details)[/bold red] "
+                status_text += f"| [magenta]Time: {data['time']:.2f}s[/magenta]\n"
+                
             progress.console.print(status_text)
-            
-        processor.process_directory(temp_dir, final_output_dir, progress_callback=update_ui)
-        
-    cleanup_temp(temp_dir)
-    console.print("[bold green]Batch processing completed successfully.[/bold green]")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--zip", required=True)
-    parser.add_argument("--model", default="weights/yolov8n.pt")
-    parser.add_argument("--raw", default="data/raw")
-    parser.add_argument("--processed", default="data/processed")
-    args = parser.parse_args()
-    
-    run_bulk_pipeline(args.zip, args.model, args.raw, args.processed)

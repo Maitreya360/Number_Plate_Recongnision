@@ -1,5 +1,6 @@
 import cv2
 import time
+import traceback
 from pathlib import Path
 from detect import PlateDetector
 from preprocess import clean_plate_image
@@ -26,47 +27,87 @@ class BatchProcessor:
             
             log_file.write(f"--- Batch Processing Started ---\n")
             log_file.write(f"Total files found: {total_files}\n\n")
+            log_file.flush()
             
-            for idx, img_path in enumerate(image_files, 1):
-                start_time = time.time()
-                
-                original_image, plates = self.detector.detect_and_crop(str(img_path))
-                detected_texts = []
-                
-                if plates:
-                    for plate_idx, (cropped_plate, coords) in enumerate(plates):
-                        cleaned_plate = clean_plate_image(cropped_plate)
-                        text = extract_text(cleaned_plate)
-                        detected_texts.append(text)
+            try:
+                for idx, img_path in enumerate(image_files, 1):
+                    start_time = time.time()
+                    
+                    try:
+                        # Image-Level Execution Block
+                        original_image, plates = self.detector.detect_and_crop(str(img_path))
+                        detected_texts = []
+                        log_results = []
                         
-                        x1, y1, x2, y2 = coords
-                        cv2.rectangle(original_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                        cv2.putText(original_image, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
-                
-                save_path = output_path / img_path.name
-                if original_image is not None:
-                    cv2.imwrite(str(save_path), original_image)
-                
-                elapsed = time.time() - start_time
-                
-                plates_str = ", ".join(detected_texts) if detected_texts else "None"
-                
-                log_file.write(f"[{idx}/{total_files}] File: {img_path.name}\n")
-                log_file.write(f"Status: Processed\n")
-                log_file.write(f"Plates Detected: {plates_str}\n")
-                log_file.write(f"Processing Time: {elapsed:.4f} seconds\n")
-                log_file.write(f"----------------------------------------\n")
+                        if plates:
+                            for plate_idx, (cropped_plate, coords) in enumerate(plates):
+                                cleaned_plate = clean_plate_image(cropped_plate)
+                                text, conf = extract_text(cleaned_plate)
+                                
+                                formatted_result = f"{text} ({conf:.1f}%)"
+                                detected_texts.append(formatted_result)
+                                log_results.append((text, conf))
+                                
+                                x1, y1, x2, y2 = coords
+                                cv2.rectangle(original_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                                cv2.putText(original_image, formatted_result, (x1, y1 - 10), 
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (36, 255, 12), 2)
+                        
+                        save_path = output_path / img_path.name
+                        if original_image is not None:
+                            cv2.imwrite(str(save_path), original_image)
+                        
+                        elapsed = time.time() - start_time
+                        plates_str = ", ".join(detected_texts) if detected_texts else "None"
+                        
+                        # Write Success Logs
+                        log_file.write(f"[{idx}/{total_files}] File: {img_path.name}\n")
+                        log_file.write(f"Status: SUCCESS\n")
+                        log_file.write(f"Plates Detected: {plates_str}\n")
+                        log_file.write(f"Processing Time: {elapsed:.4f} seconds\n")
+                        log_file.write(f"----------------------------------------\n")
+                        log_file.flush()
+                        
+                        res_file.write(f"{img_path.name}: {plates_str}\n")
+                        res_file.flush()
+                        
+                        if progress_callback:
+                            result_data = {
+                                "file": img_path.name,
+                                "texts": detected_texts,
+                                "time": elapsed,
+                                "index": idx,
+                                "total": total_files,
+                                "status": "SUCCESS"
+                            }
+                            progress_callback(result_data)
+                            
+                    except Exception as img_err:
+                        # Image-Level Crash Handler (Corrupt image, bad bounds, etc.)
+                        elapsed = time.time() - start_time
+                        error_trace = traceback.format_exc()
+                        
+                        log_file.write(f"[{idx}/{total_files}] File: {img_path.name}\n")
+                        log_file.write(f"Status: FAILED\n")
+                        log_file.write(f"Error Details:\n{error_trace}\n")
+                        log_file.write(f"----------------------------------------\n")
+                        log_file.flush()
+                        
+                        if progress_callback:
+                            progress_callback({
+                                "file": img_path.name,
+                                "texts": ["ERROR"],
+                                "time": elapsed,
+                                "index": idx,
+                                "total": total_files,
+                                "status": "FAILED"
+                            })
+                            
+            except Exception as fatal_err:
+                # System-Level Crash Handler (Out of memory, critical YOLO failure, etc.)
+                error_trace = traceback.format_exc()
+                log_file.write(f"\n!!! FATAL SYSTEM CRASH !!!\n")
+                log_file.write(f"Execution aborted at file {idx} of {total_files}.\n")
+                log_file.write(f"Crash Reason:\n{error_trace}\n")
                 log_file.flush()
-                
-                res_file.write(f"{img_path.name}: {plates_str}\n")
-                res_file.flush()
-                
-                if progress_callback:
-                    result_data = {
-                        "file": img_path.name,
-                        "texts": detected_texts,
-                        "time": elapsed,
-                        "index": idx,
-                        "total": total_files
-                    }
-                    progress_callback(result_data)
+                raise # Re-raises the error to stop the script safely after logging
