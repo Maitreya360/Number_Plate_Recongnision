@@ -1,35 +1,50 @@
 import argparse
-import cv2
-from detect import PlateDetector
-from preprocess import clean_plate_image
-from ocr import extract_text
+from pathlib import Path
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
+from engine.zip_manager import extract_and_prepare, cleanup_temp
+from engine.processor import BatchProcessor
 
-def main(image_path, model_path):
-    detector = PlateDetector(model_path=model_path)
-    original_image, plates = detector.detect_and_crop(image_path)
+def run_bulk_pipeline(zip_path, model_path, raw_dir, processed_dir):
+    console = Console()
+    console.print(f"[bold blue]Initializing Q/A testing pipeline for {zip_path}[/bold blue]")
     
-    if not plates:
-        print("No plates detected.")
-        return
-
-    for idx, (cropped_plate, coords) in enumerate(plates):
-        cleaned_plate = clean_plate_image(cropped_plate)
-        text = extract_text(cleaned_plate)
+    temp_dir, base_name = extract_and_prepare(zip_path, raw_dir)
+    final_output_dir = Path(processed_dir) / base_name
+    
+    processor = BatchProcessor(model_path=model_path)
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        console=console
+    ) as progress:
         
-        print(f"Plate {idx + 1}: {text}")
+        task_id = progress.add_task("[cyan]Processing images...", total=None)
         
-        x1, y1, x2, y2 = coords
-        cv2.rectangle(original_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(original_image, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
-
-    cv2.imshow("Detected Plates", original_image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        def update_ui(data):
+            progress.update(task_id, total=data["total"], completed=data["index"])
+            
+            status_text = f"[green]{data['index']} of {data['total']}[/green] - [yellow]{data['file']}[/yellow]\n"
+            status_text += f"[bold white]Detected: {', '.join(data['texts']) if data['texts'] else 'None'}[/bold white] "
+            status_text += f"| [magenta]Time: {data['time']:.2f}s[/magenta]\n"
+            
+            progress.console.print(status_text)
+            
+        processor.process_directory(temp_dir, final_output_dir, progress_callback=update_ui)
+        
+    cleanup_temp(temp_dir)
+    console.print("[bold green]Batch processing completed successfully.[/bold green]")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image", required=True)
+    parser.add_argument("--zip", required=True)
     parser.add_argument("--model", default="weights/yolov8n.pt")
+    parser.add_argument("--raw", default="data/raw")
+    parser.add_argument("--processed", default="data/processed")
     args = parser.parse_args()
     
-    main(args.image, args.model)
+    run_bulk_pipeline(args.zip, args.model, args.raw, args.processed)
