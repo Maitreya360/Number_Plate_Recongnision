@@ -29,12 +29,15 @@ class BatchProcessor:
             log_file.write(f"Total files found: {total_files}\n\n")
             log_file.flush()
             
+            res_file.write(f"{'FILE NAME':<45} | {'STATUS':<10} | {'DETECTED PLATES'}\n")
+            res_file.write("-" * 90 + "\n")
+            res_file.flush()
+            
             try:
                 for idx, img_path in enumerate(image_files, 1):
                     start_time = time.time()
                     
                     try:
-                        # Image-Level Execution Block
                         original_image, plates = self.detector.detect_and_crop(str(img_path))
                         detected_texts = []
                         log_results = []
@@ -60,7 +63,6 @@ class BatchProcessor:
                         elapsed = time.time() - start_time
                         plates_str = ", ".join(detected_texts) if detected_texts else "None"
                         
-                        # Write Success Logs
                         log_file.write(f"[{idx}/{total_files}] File: {img_path.name}\n")
                         log_file.write(f"Status: SUCCESS\n")
                         log_file.write(f"Plates Detected: {plates_str}\n")
@@ -68,7 +70,7 @@ class BatchProcessor:
                         log_file.write(f"----------------------------------------\n")
                         log_file.flush()
                         
-                        res_file.write(f"{img_path.name}: {plates_str}\n")
+                        res_file.write(f"{img_path.name:<45} | {'SUCCESS':<10} | {plates_str}\n")
                         res_file.flush()
                         
                         if progress_callback:
@@ -83,7 +85,6 @@ class BatchProcessor:
                             progress_callback(result_data)
                             
                     except Exception as img_err:
-                        # Image-Level Crash Handler (Corrupt image, bad bounds, etc.)
                         elapsed = time.time() - start_time
                         error_trace = traceback.format_exc()
                         
@@ -92,6 +93,9 @@ class BatchProcessor:
                         log_file.write(f"Error Details:\n{error_trace}\n")
                         log_file.write(f"----------------------------------------\n")
                         log_file.flush()
+                        
+                        res_file.write(f"{img_path.name:<45} | {'FAILED':<10} | ERROR\n")
+                        res_file.flush()
                         
                         if progress_callback:
                             progress_callback({
@@ -104,10 +108,12 @@ class BatchProcessor:
                             })
                             
             except Exception as fatal_err:
-                # System-Level Crash Handler (Out of memory, critical YOLO failure, etc.)
                 error_trace = traceback.format_exc()
                 log_file.write(f"\n!!! FATAL SYSTEM CRASH !!!\n")
                 log_file.write(f"Execution aborted at file {idx} of {total_files}.\n")
                 log_file.write(f"Crash Reason:\n{error_trace}\n")
                 log_file.flush()
-                raise # Re-raises the error to stop the script safely after logging
+                
+                res_file.write(f"{'FATAL CRASH':<45} | {'ABORTED':<10} | SEE BATCH_LOGS.TXT\n")
+                res_file.flush()
+                raise

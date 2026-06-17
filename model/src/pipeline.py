@@ -38,3 +38,18 @@ def run_bulk_pipeline(zip_path, model_path, raw_dir, processed_dir):
                 status_text += f"| [magenta]Time: {data['time']:.2f}s[/magenta]\n"
                 
             progress.console.print(status_text)
+            
+        processor.process_directory(temp_dir, final_output_dir, progress_callback=update_ui)
+        
+    cleanup_temp(temp_dir)
+    console.print("[bold green]Batch processing completed successfully.[/bold green]")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--zip", required=True)
+    parser.add_argument("--model", default="weights/plate_detector.pt")
+    parser.add_argument("--raw", default="data/raw")
+    parser.add_argument("--processed", default="data/processed")
+    args = parser.parse_args()
+    
+    run_bulk_pipeline(args.zip, args.model, args.raw, args.processed)
