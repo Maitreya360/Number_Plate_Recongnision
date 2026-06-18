@@ -1,0 +1,64 @@
+# Simple ML project .gitignore
+
+# Python cache and virtualenvs
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.env
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Data & outputs: ignore all files inside model/data and runs, but keep .gitkeep so folders remain tracked ---
+# Ignore all files under model/data (this keeps folder structure but prevents committing data)
+model/data/**
+!model/data/**/.gitkeep
+
+# Ignore run outputs
+runs/**
+!runs/**/.gitkeep
+model/runs/**
+!model/runs/**/.gitkeep
+
+# Common media and dataset files (extra safety)
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tif
+*.tiff
+*.webp
+*.mp4
+*.avi
+
+# Label / annotation files used as data (these are often large and generated)
+*.txt
+*.xml
+*.json
+
+# Weights / checkpoints
+model/weights/**
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.onnx
+
+# Logs, temp, archives
+*.log
+logs/
+tmp/
+*.zip
+*.tar.gz
+*.rar
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Keep README, requirements, src/ and scripts tracked (do not ignore)
