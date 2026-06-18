@@ -7,7 +7,7 @@ from engine.processor import BatchProcessor
 
 def run_bulk_pipeline(zip_path, model_path, raw_dir, processed_dir):
     console = Console()
-    console.print(f"[bold blue]Initializing Q/A testing pipeline for {zip_path}[/bold blue]")
+    console.print(f"[bold blue]Initializing pipeline for {zip_path}[/bold blue]")
     
     temp_dir, base_name = extract_and_prepare(zip_path, raw_dir)
     final_output_dir = Path(processed_dir) / base_name

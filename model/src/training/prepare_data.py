@@ -18,11 +18,11 @@ def build_dataset(raw_dir, yolo_dir):
     raw_path = Path(raw_dir)
     yolo_path = Path(yolo_dir)
     
-    # Create the YOLO directory structure
+    # 1. Create YOLO structure
     for p in ["images/train", "images/val", "labels/train", "labels/val"]:
         (yolo_path / p).mkdir(parents=True, exist_ok=True)
 
-    # Automatically generate the data.yaml file if it doesn't exist
+    # 2. Generate data.yaml
     yaml_path = yolo_path / "data.yaml"
     if not yaml_path.exists():
         with open(yaml_path, "w") as f:
@@ -32,31 +32,37 @@ def build_dataset(raw_dir, yolo_dir):
             f.write("nc: 1\n")
             f.write("names: ['license_plate']\n")
 
-    # Find all XML files recursively in your raw folder
+    print(f"Scanning '{raw_dir}' for XMLs and Images regardless of folder structure...")
+    
+    # 3. SMART MAPPER: Find ALL images everywhere and log their paths
+    image_map = {}
+    valid_exts = {'.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'}
+    for img_path in raw_path.rglob("*"):
+        if img_path.suffix in valid_exts:
+            # Save the file name without the extension (the stem)
+            image_map[img_path.stem] = img_path
+            
+    # 4. Find ALL XML files everywhere
     xml_files = list(raw_path.rglob("*.xml"))
     random.shuffle(xml_files)
     
     success_count = 0
     for xml_file in xml_files:
-        # Look for the matching JPG image
-        jpg_file = xml_file.with_suffix('.jpg')
-        if not jpg_file.exists():
-            # Sometimes extensions are uppercase
-            jpg_file = xml_file.with_suffix('.JPG')
-            if not jpg_file.exists():
-                continue
+        # Check if we found a matching image somewhere in the giant image_map
+        if xml_file.stem not in image_map:
+            print(f"Warning: Found '{xml_file.name}' but could not find a matching image anywhere. Skipping.")
+            continue
+            
+        img_path = image_map[xml_file.stem]
         
-        # Decide if this goes to 'train' (80%) or 'val' (20%)
         folder_type = "train" if random.random() < 0.8 else "val"
         
-        target_img_path = yolo_path / "images" / folder_type / jpg_file.name
-        target_lbl_path = yolo_path / "labels" / folder_type / xml_file.with_suffix('.txt').name
+        target_img_path = yolo_path / "images" / folder_type / img_path.name
+        target_lbl_path = yolo_path / "labels" / folder_type / f"{xml_file.stem}.txt"
         
-        # Skip if we already added this file in a previous run
         if target_img_path.exists() and target_lbl_path.exists():
             continue
 
-        # Convert XML to YOLO TXT
         try:
             tree = ET.parse(xml_file)
             root = tree.getroot()
@@ -72,19 +78,19 @@ def build_dataset(raw_dir, yolo_dir):
                     bb = convert_bbox((w, h), b)
                     out_file.write(f"0 {bb[0]:.6f} {bb[1]:.6f} {bb[2]:.6f} {bb[3]:.6f}\n")
             
-            # Copy Image
-            shutil.copy(jpg_file, target_img_path)
+            shutil.copy(img_path, target_img_path)
             success_count += 1
             
         except Exception as e:
-            print(f"Skipping {xml_file.name} due to error: {e}")
+            print(f"Error processing '{xml_file.name}': {e}")
 
-    print(f"✅ Successfully processed and added {success_count} new images to {yolo_dir}")
+    print(f"Successfully paired and added {success_count} new images to the training pile.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--raw", required=True, help="Folder containing new raw XML and JPG files")
-    parser.add_argument("--yolo", default="data/test_sample", help="Where to store the training data")
+    parser.add_argument("--raw", required=True)
+    # Changed default to match your exact folder name "test_samples"
+    parser.add_argument("--yolo", default=r"data\test_samples") 
     args = parser.parse_args()
     
     build_dataset(args.raw, args.yolo)
