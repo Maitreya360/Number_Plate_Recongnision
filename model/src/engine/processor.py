@@ -47,14 +47,17 @@ class BatchProcessor:
                                 cleaned_plate = clean_plate_image(cropped_plate)
                                 text, conf = extract_text(cleaned_plate)
                                 
-                                formatted_result = f"{text} ({conf:.1f}%)"
-                                detected_texts.append(formatted_result)
-                                log_results.append((text, conf))
+                                if text:
+                                    formatted_result = f"{text} ({conf:.1f}%)"
+                                    detected_texts.append(formatted_result)
+                                    log_results.append((text, conf))
                                 
                                 x1, y1, x2, y2 = coords
                                 cv2.rectangle(original_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                                cv2.putText(original_image, formatted_result, (x1, y1 - 10), 
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (36, 255, 12), 2)
+                                
+                                if text:
+                                    cv2.putText(original_image, formatted_result, (x1, y1 - 10), 
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (36, 255, 12), 2)
                         
                         save_path = output_path / img_path.name
                         if original_image is not None:
